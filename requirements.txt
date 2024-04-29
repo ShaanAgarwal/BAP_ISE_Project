@@ -8,3 +8,4 @@ dash-table
 plotly
 dash-bootstrap-components
 nltk
+pytest

@@ -19,6 +19,9 @@ guide_names = df[['Guid 1 Name', 'Guid 2 Name']].stack().unique()
 all_years = sorted(df['Start Year'].unique())
 application_types = df['Application Type'].unique()
 
+df['Type of Paper'] = df['Type of Paper'].fillna('Unknown')
+df['Type of Publication'] = df['Type of Publication'].fillna('Unknown')
+
 publication_counts_all_years = df['Start Year'].value_counts().reset_index()
 publication_counts_all_years.columns = ['Year', 'Publication Count']
 publication_counts_all_years = publication_counts_all_years.sort_values(by='Year')
@@ -35,6 +38,15 @@ stop_words.update(custom_stopwords)
 
 app.layout = html.Div([
     html.H1("Dashboard"),
+    html.Div([
+    dcc.Dropdown(
+        id='paper-dropdown',
+        options=[{'label': paper, 'value': paper} for paper in df['Type of Paper'].fillna('Unknown').unique()],
+        value=df['Type of Paper'].fillna('Unknown').unique()[0]
+    ),
+    html.Div(id='total-count-output'),
+    dcc.Graph(id='pie-chart')
+    ]),
     html.Div([
         html.Div([
             dcc.Graph(figure=fig_timeline)
@@ -124,15 +136,46 @@ app.layout = html.Div([
     ]),
 ])
 
+def calculate_value(selected_paper):
+    if selected_paper == 'Unknown':
+        filtered_df = df
+    else:
+        filtered_df = df[df['Type of Paper'] == selected_paper]
+    filtered_df['Type of Publication'].fillna('Unknown', inplace=True)
+    total_count = filtered_df['Type of Publication'].value_counts().sum()
+    return total_count
+
+@app.callback(
+    Output('pie-chart', 'figure'),
+    [Input('paper-dropdown', 'value')]
+)
+def update_pie_chart(selected_paper):
+    total_count = calculate_value(selected_paper)
+    filtered_df = df[df['Type of Paper'] == selected_paper]
+    filtered_df['Type of Publication'].fillna('Unknown', inplace=True)
+    filtered_df['Type of Paper'].fillna('Unknown', inplace=True)
+    publication_counts = filtered_df['Type of Publication'].value_counts().reset_index()
+    publication_counts.columns = ['Type of Publication', 'Count']
+    fig = px.pie(publication_counts, values='Count', names='Type of Publication', title=f'Distribution of Publication Types for {selected_paper}')
+    return fig
+
+@app.callback(
+    Output('total-count-output', 'children'),
+    [Input('paper-dropdown', 'value')]
+)
+def update_total_count(selected_paper):
+    total_count = calculate_value(selected_paper)
+    return f'Total Count: {total_count}'
+
 @app.callback(
     [Output('bar-graph', 'figure'), Output('sunburst-chart', 'figure')],
     [Input('application-type-dropdown', 'value')]
 )
 def update_charts(selected_application_type):
     filtered_df = df[df['Application Type'] == selected_application_type]
-    filtered_df['Application Course'] = filtered_df['Application Course'].fillna('Unknown')
-    filtered_df['Application Department'] = filtered_df['Application Department'].fillna('Unknown')
-    filtered_df['Application Class'] = filtered_df['Application Class'].fillna('Unknown')
+    filtered_df.loc[:, 'Application Course'] = filtered_df['Application Course'].fillna('Unknown')
+    filtered_df.loc[:, 'Application Department'] = filtered_df['Application Department'].fillna('Unknown')
+    filtered_df.loc[:, 'Application Class'] = filtered_df['Application Class'].fillna('Unknown')
 
     counts = filtered_df['Start Year'].value_counts().reset_index()
     counts.columns = ['Year', 'Count']
