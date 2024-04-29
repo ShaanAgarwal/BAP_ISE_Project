@@ -28,6 +28,11 @@ department_distribution = df['Application Department'].value_counts().reset_inde
 department_distribution.columns = ['Department', 'Paper Count']
 fig_department_distribution = px.bar(department_distribution, x='Department', y='Paper Count', title='Department-wise Distribution of Papers')
 
+custom_stopwords = {'using', 'example', 'additional', 'words', 'remove', 'based', 'approach', 'man', 'topic', 'made'}
+
+stop_words = set(stopwords.words('english'))
+stop_words.update(custom_stopwords)
+
 app.layout = html.Div([
     html.H1("Dashboard"),
     html.Div([
@@ -74,28 +79,32 @@ app.layout = html.Div([
     ]),
     html.Div([
         html.Div([
-            html.Div([
-                html.H3("Paper Count by Type of Paper"),
-                dcc.Graph(id='paper-type-count', style={'width': '100%', 'height': '400px'})
-            ], style={'width': '50%', 'display': 'inline-block'}),
-            html.Div([
-                html.H3("Paper Count by Application Department and Type of Publication"),
-                dcc.Graph(id='paper-department-count', style={'width': '100%', 'height': '400px'})
-            ], style={'width': '50%', 'display': 'inline-block'})
-        ])
+            html.H3("Paper Count by Type of Paper"),
+            dcc.Graph(id='paper-type-count', style={'width': '100%', 'height': '400px'})
+        ], style={'width': '50%', 'display': 'inline-block'}),
+        html.Div([
+            html.H3("Paper Count by Application Department and Type of Publication"),
+            dcc.Graph(id='paper-department-count', style={'width': '100%', 'height': '400px'})
+        ], style={'width': '50%', 'display': 'inline-block'})
     ]),
     html.Div([
-        html.H3("Top Guides with Most Papers"),
-        dcc.Input(
-            id='top-guides-input',
-            type='number',
-            placeholder='Enter number of top guides',
-            min=1,
-            max=len(guide_names),
-            step=1,
-            value=5
-        ),
-        dcc.Graph(id='top-guides-bar-chart', style={'width': '100%', 'height': '400px'})
+    html.H3("Top Guides/Professors"),
+    dcc.Input(
+        id='top-guides-input',
+        type='number',
+        placeholder='Enter number of top guides',
+        min=1,
+        max=len(guide_names),
+        step=1,
+        value=5
+    ),
+    dcc.Input(
+        id='domain-input',
+        type='text',
+        placeholder='Enter domain or keyword',
+        value=''
+    ),
+    dcc.Graph(id='top-guides-professors-bar-chart', style={'width': '100%', 'height': '400px'})
     ]),
 ])
 
@@ -157,29 +166,15 @@ def update_paper_count_graphs(selected_guide):
     return fig_paper_type_count, fig_paper_department_count
 
 @app.callback(
-    Output('top-guides-bar-chart', 'figure'),
-    [Input('top-guides-input', 'value')]
-)
-def update_top_guides_bar_chart(top_count):
-    if top_count is None or top_count <= 0:
-        top_count = 5
-    top_guides = pd.concat([df['Guid 1 Name'], df['Guid 2 Name']]).value_counts().nlargest(top_count)
-    fig = px.bar(x=top_guides.index, y=top_guides.values, title=f'Top {top_count} Guides with Most Papers')
-    fig.update_xaxes(title='Guide Names')
-    fig.update_yaxes(title='Paper Count')
-    return fig
-
-@app.callback(
     Output('wordcloud-container', 'children'),
     [Input('application-type-dropdown', 'value')]
 )
 def generate_wordcloud(selected_application_type):
     filtered_df = df[df['Application Type'] == selected_application_type]
     filtered_df = filtered_df.dropna(subset=['Title of Paper'])
-    stop_words = set(stopwords.words('english'))
     titles = ' '.join(filtered_df['Title of Paper'])
     titles_no_stopwords = ' '.join([word for word in titles.split() if word.lower() not in stop_words])
-    wordcloud = WordCloud(width=800, height=400, background_color='white').generate(titles_no_stopwords)
+    wordcloud = WordCloud(stopwords=stop_words, width=800, height=400, background_color='white').generate(titles_no_stopwords)
     img_stream = io.BytesIO()
     wordcloud.to_image().save(img_stream, format='PNG')
     encoded_image = base64.b64encode(img_stream.getvalue()).decode()
@@ -212,5 +207,27 @@ def update_sankey_diagram(selected_application_type):
     fig_sankey.update_layout(title_text="Flow of Publications by Department and Type", font=dict(size=10))
     return fig_sankey
 
+@app.callback(
+    Output('top-guides-professors-bar-chart', 'figure'),
+    [Input('top-guides-input', 'value'),
+     Input('domain-input', 'value')]
+)
+def update_top_guides_professors_bar_chart(top_count, keyword):
+    if top_count is None or top_count <= 0:
+        top_count = 5
+    if keyword:
+        filtered_df = df[df['Title of Paper'].str.contains(keyword, case=False)]
+        top_entities = filtered_df[['Guid 1 Name', 'Guid 2 Name']].stack().value_counts().nlargest(top_count)
+        title = f'Top Professors with Papers on "{keyword}"'
+        x_label = 'Professor Names'
+    else:
+        top_entities = pd.concat([df['Guid 1 Name'], df['Guid 2 Name']]).value_counts().nlargest(top_count)
+        title = f'Top {top_count} Guides with Most Papers'
+        x_label = 'Guide/Professor Names'
+    fig = px.bar(x=top_entities.index, y=top_entities.values, title=title)
+    fig.update_xaxes(title=x_label)
+    fig.update_yaxes(title='Paper Count')
+    return fig
+        
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8080, debug=False)
