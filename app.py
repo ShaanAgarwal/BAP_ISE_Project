@@ -61,10 +61,10 @@ app.layout = html.Div([
             html.Div([
                 html.H3("Word Cloud of Paper Titles"),
                 html.Div(id='wordcloud-container')
-            ], style={'width': '50%', 'display': 'inline-block'}),
+            ], style={'width': '65%', 'display': 'inline-block'}),
             html.Div([
             dcc.Graph(id='sankey-diagram')
-            ], style={'width': '50%', 'display': 'inline-block'}),
+            ], style={'width': '35%', 'display': 'inline-block'}),
         ]),
     ]),
     dcc.Dropdown(
@@ -105,6 +105,16 @@ app.layout = html.Div([
         value=''
     ),
     dcc.Graph(id='top-guides-professors-bar-chart', style={'width': '100%', 'height': '400px'})
+    ]),
+    html.Div([
+    html.H1("Interactive Plot"),
+    html.Label("Select Year:"),
+    dcc.Dropdown(
+        id='year-dropdown',
+        options=[{'label': year, 'value': year} for year in df['Year'].unique()],
+        value=df['Year'].unique()[0]
+    ),
+    dcc.Graph(id='plot')
     ]),
 ])
 
@@ -227,6 +237,30 @@ def update_top_guides_professors_bar_chart(top_count, keyword):
     fig = px.bar(x=top_entities.index, y=top_entities.values, title=title)
     fig.update_xaxes(title=x_label)
     fig.update_yaxes(title='Paper Count')
+    return fig
+
+@app.callback(
+    Output('plot', 'figure'),
+    [Input('year-dropdown', 'value')]
+)
+def update_plot(selected_year):
+    filtered_df = df[df['Year'] == selected_year]
+    all_guides = filtered_df[['Guid 1 Name', 'Guid 2 Name']].stack().reset_index(drop=True).unique()
+    guide_titles_df = pd.DataFrame(index=all_guides, columns=['Title of Paper', 'Paper Count'])
+    for guide in all_guides:
+        titles = filtered_df[(filtered_df['Guid 1 Name'] == guide) | (filtered_df['Guid 2 Name'] == guide)]['Title of Paper'].tolist()
+        guide_titles_df.loc[guide, 'Title of Paper'] = '<br>'.join(titles)
+        guide_titles_df.loc[guide, 'Paper Count'] = len(titles)
+    guide_titles_df = guide_titles_df.sort_values(by='Paper Count', ascending=False)
+    fig = go.Figure()
+    for guide, titles in guide_titles_df.iterrows():
+        fig.add_trace(go.Bar(x=[guide], y=[titles['Paper Count']], name=guide, hovertext=f"Paper Count: {titles['Paper Count']}<br>{titles['Title of Paper']}", hoverinfo='text'))
+    fig.update_layout(
+        title=f'Titles of Papers by Guides ({selected_year})',
+        xaxis={'title': {'text': 'Guide Names', 'standoff': 40}, 'tickangle': -45},
+        yaxis={'title': 'Number of Papers'},
+        margin={'l': 80, 'r': 80, 't': 100, 'b': 120}
+    )
     return fig
         
 if __name__ == '__main__':
