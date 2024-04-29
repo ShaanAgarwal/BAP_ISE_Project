@@ -116,6 +116,12 @@ app.layout = html.Div([
     ),
     dcc.Graph(id='plot')
     ]),
+    html.Div([
+    html.Div([
+        html.H3("Sunburst Chart"),
+        dcc.Graph(id='sunburst-chart2')
+    ], style={'width': '100%', 'display': 'inline-block'}),
+    ]),
 ])
 
 @app.callback(
@@ -124,9 +130,10 @@ app.layout = html.Div([
 )
 def update_charts(selected_application_type):
     filtered_df = df[df['Application Type'] == selected_application_type]
-    filtered_df.loc[:, 'Application Course'] = filtered_df['Application Course'].fillna('Unknown')
-    filtered_df.loc[:, 'Application Department'] = filtered_df['Application Department'].fillna('Unknown')
-    filtered_df.loc[:, 'Application Class'] = filtered_df['Application Class'].fillna('Unknown')
+    filtered_df['Application Course'] = filtered_df['Application Course'].fillna('Unknown')
+    filtered_df['Application Department'] = filtered_df['Application Department'].fillna('Unknown')
+    filtered_df['Application Class'] = filtered_df['Application Class'].fillna('Unknown')
+
     counts = filtered_df['Start Year'].value_counts().reset_index()
     counts.columns = ['Year', 'Count']
     counts = counts.sort_values(by='Year')
@@ -262,6 +269,25 @@ def update_plot(selected_year):
         margin={'l': 80, 'r': 80, 't': 100, 'b': 120}
     )
     return fig
+
+@app.callback(
+    Output('sunburst-chart2', 'figure'),
+    [Input('application-type-dropdown', 'value')]
+)
+def update_sunburst_chart(selected_application_type):
+    filtered_df = df[df['Application Type'] == selected_application_type]
+    filtered_df['Type of Paper'].fillna('Unknown', inplace=True)
+    filtered_df['Type of Publication'].fillna('Unknown', inplace=True)
+    filtered_df['Conference_Type'].fillna('Unknown', inplace=True)
+    fig_sunburst_updated2 = px.sunburst(filtered_df, path=['Type of Paper', 'Type of Publication', 'Conference_Type'])
+    fig_sunburst_updated2.update_traces(
+        marker=dict(
+            colors=px.colors.qualitative.Set3
+        ),
+        textinfo='label+percent entry',
+        insidetextorientation='radial'
+    )
+    return fig_sunburst_updated2
         
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8080, debug=False)
